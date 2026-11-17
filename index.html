@@ -1,0 +1,650 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Inventário de Ativos</title>
+<style>
+html{height:100%}
+body{font-family:Arial;background:#0f172a;color:#e5e7eb;margin:0;height:100%;display:flex;flex-direction:column;overflow:hidden}
+.wrap{max-width:1200px;width:100%;margin:0 auto;padding:24px;display:flex;flex-direction:column;flex:1;min-height:0;box-sizing:border-box}
+.card{background:#111827;border:1px solid #334155;border-radius:14px;padding:18px;margin-bottom:16px}
+.card:last-child{flex:1;min-height:0;display:flex;flex-direction:column;margin-bottom:0;overflow:hidden}
+h1{margin-top:0}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
+input,select,button,textarea{box-sizing:border-box;width:100%;padding:10px;border-radius:8px;border:1px solid #475569;background:#1e293b;color:#fff}
+button{
+  cursor:pointer;
+  background:transparent;
+  border:1px solid #3b82f6;
+  color:#3b82f6;
+  border-radius:4px;
+  padding:4px 6px;
+  font-size:10px;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:.03em;
+  transition:background-color .15s, color .15s;
+}
+button:hover:not(:disabled){background:#3b82f6;color:#fff}
+button:disabled{opacity:.5;cursor:not-allowed}
+button:focus-visible{outline:2px solid #93c5fd;outline-offset:2px}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px}
+.toolbar button{width:auto}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.stat{background:#1e293b;padding:14px;border-radius:10px}
+.stat b{display:block;font-size:24px}
+table{width:100%;border-collapse:collapse;min-width:850px}
+th,td{padding:9px;text-align:left}
+td{border-bottom:1px solid #334155}
+th{cursor:pointer;color:#93c5fd;user-select:none;position:sticky;top:0;background:#111827;z-index:2;box-shadow:inset 0 -1px 0 #334155}
+th[data-sort]::after{content:' ↕';opacity:.4}
+th[aria-sort="ascending"]::after{content:' ↑';opacity:1}
+th[aria-sort="descending"]::after{content:' ↓';opacity:1}
+th:focus-visible{outline:2px solid #93c5fd;outline-offset:-2px}
+.tablewrap{overflow:auto;flex:1;min-height:0}
+.photo{width:55px;height:42px;object-fit:cover;border-radius:6px;background:#334155}
+.rowBtns{display:flex;gap:5px}
+.rowBtns button{width:auto}
+.danger{border-color:#ef4444;color:#ef4444}
+.danger:hover:not(:disabled){background:#ef4444;color:#fff}
+.secondary{border-color:#94a3b8;color:#94a3b8}
+.secondary:hover:not(:disabled){background:#64748b;color:#fff}
+dialog{background:#111827;color:#fff;border:1px solid #475569;border-radius:14px;width:min(700px,92vw)}
+dialog::backdrop{background:#000a}
+.preview{max-width:180px;max-height:130px;border-radius:8px;margin-top:8px}
+.print-header{display:none}
+.search-label{display:block;margin:0 0 6px;color:#93c5fd;font-size:13px}
+@media (max-width:600px),(max-height:500px){
+  html,body{height:auto;overflow:visible}
+  body{display:block}
+  .wrap{display:block;flex:none;height:auto}
+  .card:last-child{display:block;flex:none;overflow:visible}
+  .tablewrap{flex:none;max-height:60vh;overflow:auto}
+}
+@page{size:A4 landscape;margin:10mm}
+@media print{
+  html,body{height:auto;overflow:visible;display:block}
+  body{background:#fff;color:#000;margin:0;font-family:Arial,sans-serif;font-size:9pt}
+  .wrap{max-width:none;padding:0;display:block;flex:none;height:auto}
+  .card:last-child{display:block;flex:none;overflow:visible;margin-bottom:0}
+  .no-print,.stats,th:first-child,td:first-child{display:none!important}
+  .print-header{display:block;margin-bottom:4mm}
+  .print-header h1{margin:0 0 2mm;font-size:14pt;color:#000}
+  .print-header p{margin:0 0 3mm;font-size:9pt;color:#444}
+  .card{border:0;background:#fff;padding:0;margin:0;box-shadow:none}
+  .tablewrap{overflow:visible;flex:none}
+  table{min-width:0;width:100%;table-layout:fixed;border-collapse:collapse}
+  th,td{color:#000!important;border:1px solid #777;padding:3px 4px;word-break:break-word;white-space:normal}
+  th{background:#eee!important;font-size:8.5pt;position:static;box-shadow:none}
+  th[data-sort]::after{content:''}
+  th:nth-child(2),td:nth-child(2){width:15%}
+  th:nth-child(3),td:nth-child(3){width:18%}
+  th:nth-child(4),td:nth-child(4){width:13%}
+  th:nth-child(5),td:nth-child(5){width:39%}
+  th:nth-child(6),td:nth-child(6){width:15%}
+  tr{break-inside:avoid;page-break-inside:avoid}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="print-header">
+    <h1>Inventário de Ativos</h1>
+    <p>Relatório gerado em <span id="printDate"></span></p>
+  </div>
+
+  <div class="card no-print">
+    <h1>📷 Inventário de Ativos</h1>
+    <div class="stats" id="stats"></div>
+  </div>
+
+  <div class="card no-print">
+    <div class="toolbar">
+      <button type="button" onclick="novo()">＋ Adicionar</button>
+      <button type="button" class="secondary" onclick="document.getElementById('imp').click()">Importar JSON</button>
+      <button type="button" class="secondary" onclick="document.getElementById('impcsv').click()">Importar CSV</button>
+      <button type="button" onclick="exportJSON()">Exportar JSON</button>
+      <button type="button" onclick="exportCSV()">Exportar CSV</button>
+      <button type="button" onclick="printReport()">Imprimir / PDF</button>
+      <input id="imp" type="file" accept="application/json,.json" hidden>
+      <input id="impcsv" type="file" accept=".csv,text/csv" hidden>
+    </div>
+    <div style="margin-top:12px">
+      <label for="search" class="search-label">Pesquisar</label>
+      <input id="search" placeholder="Marca, modelo, numeração, característica ou estado...">
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th class="no-print">Foto</th>
+            <th data-sort="marca" tabindex="0" role="button" aria-sort="none">Marca</th>
+            <th data-sort="modelo" tabindex="0" role="button" aria-sort="none">Modelo</th>
+            <th data-sort="numeracao" tabindex="0" role="button" aria-sort="none">Numeração</th>
+            <th data-sort="caracteristica" tabindex="0" role="button" aria-sort="none">Característica</th>
+            <th data-sort="estado" tabindex="0" role="button" aria-sort="none">Estado</th>
+            <th class="no-print">Ações</th>
+          </tr>
+        </thead>
+        <tbody id="body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<dialog id="dlg">
+  <form id="form" method="dialog">
+    <h2 id="dlgTitle">Nova máquina</h2>
+    <input type="hidden" id="idx">
+    <div class="grid">
+      <label>Marca<input id="marca" required autocomplete="off"></label>
+      <label>Modelo<input id="modelo" required autocomplete="off"></label>
+      <label>Numeração<input id="numeracao" readonly></label>
+      <label>Estado<select id="estado">
+        <option>Nova</option>
+        <option>Seminova</option>
+        <option>Pouco uso</option>
+        <option>Usada</option>
+      </select></label>
+    </div>
+    <label>Característica<textarea id="caracteristica" rows="3"></textarea></label>
+    <label>Foto<input type="file" id="foto" accept="image/*"></label>
+    <button type="button" class="secondary" id="btnRemovePhoto" onclick="removePhoto()" hidden style="width:auto;margin-top:8px">Remover foto</button>
+    <img id="preview" class="preview" alt="Pré-visualização da foto" hidden>
+    <div class="toolbar" style="margin-top:14px">
+      <button type="submit">Salvar</button>
+      <button type="button" class="secondary" onclick="dlg.close()">Cancelar</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+/* ============================================================
+   Configuração
+   ============================================================ */
+const KEY = 'gestao_maquinas_v2';
+const KEY_SEQ = 'gestao_maquinas_v2_seq';
+const FIELDS = ['marca', 'modelo', 'numeracao', 'caracteristica', 'estado'];
+const MAX_DIM = 800;        // dimensão máxima da foto ao redimensionar
+const JPEG_QUALITY = 0.75;  // qualidade JPEG após redimensionar
+
+const $ = id => document.getElementById(id);
+
+const searchEl      = $('search');
+const bodyEl        = $('body');
+const statsEl       = $('stats');
+const formEl        = $('form');
+const idxEl         = $('idx');
+const marcaEl       = $('marca');
+const modeloEl      = $('modelo');
+const numeracaoEl   = $('numeracao');
+const caracterEl    = $('caracteristica');
+const estadoEl      = $('estado');
+const previewEl     = $('preview');
+const btnRemoveEl   = $('btnRemovePhoto');
+const dlgEl         = $('dlg');
+const dlgTitleEl    = $('dlgTitle');
+const fotoEl        = $('foto');
+const impEl         = $('imp');
+const impcsvEl      = $('impcsv');
+
+/* ============================================================
+   Utilidades
+   ============================================================ */
+const safeGet = k => { try { return localStorage.getItem(k); } catch { return null; } };
+const safeSet = (k, v) => { try { localStorage.setItem(k, v); return true; } catch { return false; } };
+
+function esc(v) {
+  return String(v == null ? '' : v).replace(/[&<>"']/g, m => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]
+  ));
+}
+
+// Só aceita data-URLs de imagem — evita XSS via campo "foto" importado.
+const isImg = s => typeof s === 'string' &&
+  /^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=\s]+$/i.test(s);
+
+function normalize(m) {
+  if (!m || typeof m !== 'object') return null;
+  const s = v => v == null ? '' : String(v).trim();
+  return {
+    marca: s(m.marca),
+    modelo: s(m.modelo),
+    numeracao: s(m.numeracao),
+    caracteristica: s(m.caracteristica),
+    estado: s(m.estado) || 'Nova',
+    foto: isImg(m.foto) ? m.foto : ''
+  };
+}
+
+/* ============================================================
+   Estado + persistência
+   ============================================================ */
+function loadData() {
+  try {
+    const parsed = JSON.parse(safeGet(KEY) || '[]');
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map(normalize).filter(Boolean);
+  } catch { return []; }
+}
+
+let data = loadData();
+let photoData = '';
+let sort = { key: '', asc: true };
+let searchTimer;
+let insertAfterIdx = null;   // posição em `data` após a qual o novo registro será inserido; null = no fim
+
+function save() {
+  const maxN = data.reduce((m, x) => {
+    const n = parseInt(x.numeracao, 10);
+    return Number.isFinite(n) && n > m ? n : m;
+  }, 0);
+  if (!safeSet(KEY, JSON.stringify(data))) {
+    alert('Não foi possível salvar: o armazenamento local está cheio.\n\nExporte os dados e remova fotos grandes antes de continuar.');
+    return false;
+  }
+  const stored = parseInt(safeGet(KEY_SEQ) || '0', 10) || 0;
+  safeSet(KEY_SEQ, String(Math.max(maxN, stored)));
+  render();
+  return true;
+}
+
+function nextNumber() {
+  const stored = parseInt(safeGet(KEY_SEQ) || '0', 10) || 0;
+  const used = data.reduce((m, x) => {
+    const n = parseInt(x.numeracao, 10);
+    return Number.isFinite(n) && n > m ? n : m;
+  }, 0);
+  return String(Math.max(stored, used) + 1).padStart(4, '0');
+}
+
+/* ============================================================
+   Diálogo de cadastro / edição
+   ============================================================ */
+function clearCustomEstado() {
+  [...estadoEl.options].forEach(o => { if (o.dataset.custom) o.remove(); });
+}
+
+function setEstado(valor) {
+  const v = valor || 'Nova';
+  clearCustomEstado();
+  if (![...estadoEl.options].some(o => o.value === v)) {
+    const opt = document.createElement('option');
+    opt.value = v;
+    opt.textContent = v;
+    opt.dataset.custom = '1';
+    estadoEl.appendChild(opt);
+  }
+  estadoEl.value = v;
+}
+
+function resetPreview() {
+  photoData = '';
+  previewEl.hidden = true;
+  previewEl.removeAttribute('src');
+  btnRemoveEl.hidden = true;
+}
+
+function abrirFormulario() {
+  formEl.reset();
+  clearCustomEstado();
+  idxEl.value = '';
+  numeracaoEl.value = nextNumber();
+  resetPreview();
+  fotoEl.value = '';
+  dlgTitleEl.textContent = 'Nova máquina';
+  dlgEl.showModal();
+  marcaEl.focus();
+}
+
+function novo() {
+  insertAfterIdx = null;   // adiciona no fim
+  abrirFormulario();
+}
+
+function novoAbaixo(i) {
+  insertAfterIdx = i;      // adiciona logo após o registro i
+  abrirFormulario();
+}
+
+function edit(i) {
+  const m = data[i];
+  if (!m) return;
+  insertAfterIdx = null;   // edição não usa inserção
+  idxEl.value = i;
+  marcaEl.value = m.marca;
+  modeloEl.value = m.modelo;
+  numeracaoEl.value = m.numeracao;
+  caracterEl.value = m.caracteristica;
+  setEstado(m.estado);
+  photoData = m.foto || '';
+  if (photoData) {
+    previewEl.src = photoData;
+    previewEl.hidden = false;
+    btnRemoveEl.hidden = false;
+  } else {
+    resetPreview();
+  }
+  fotoEl.value = '';
+  dlgTitleEl.textContent = 'Editar máquina';
+  dlgEl.showModal();
+}
+
+function removePhoto() {
+  resetPreview();
+  fotoEl.value = '';
+}
+
+/* Redimensiona a imagem no cliente antes de gravar (evita estourar o localStorage). */
+function resizeImage(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Falha ao ler o arquivo'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Arquivo não é uma imagem válida'));
+      img.onload = () => {
+        let w = img.width, h = img.height;
+        const ratio = Math.min(1, MAX_DIM / Math.max(w, h));
+        w = Math.max(1, Math.round(w * ratio));
+        h = Math.max(1, Math.round(h * ratio));
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', JPEG_QUALITY));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+fotoEl.onchange = async e => {
+  const f = e.target.files && e.target.files[0];
+  if (!f) return;
+  try {
+    photoData = await resizeImage(f);
+    previewEl.src = photoData;
+    previewEl.hidden = false;
+    btnRemoveEl.hidden = false;
+  } catch (err) {
+    alert('Não foi possível processar a imagem: ' + err.message);
+    fotoEl.value = '';
+    resetPreview();
+  }
+};
+
+formEl.onsubmit = e => {
+  e.preventDefault();
+  const obj = normalize({
+    marca: marcaEl.value,
+    modelo: modeloEl.value,
+    numeracao: numeracaoEl.value,
+    caracteristica: caracterEl.value,
+    estado: estadoEl.value,
+    foto: photoData
+  });
+  if (!obj || !obj.marca || !obj.modelo) {
+    alert('Marca e Modelo são obrigatórios.');
+    return;
+  }
+  const i = idxEl.value;
+  if (i === '') {
+    // Inserção: no fim (padrão) ou logo após o registro escolhido
+    if (insertAfterIdx !== null && insertAfterIdx >= 0 && insertAfterIdx < data.length) {
+      data.splice(insertAfterIdx + 1, 0, obj);
+    } else {
+      data.push(obj);
+    }
+  } else {
+    data[+i] = obj;
+  }
+  insertAfterIdx = null;
+  if (save()) dlgEl.close();
+};
+
+/* ============================================================
+   Ações da tabela
+   ============================================================ */
+function del(i) {
+  const m = data[i];
+  if (!m) return;
+  if (confirm(`Excluir "${m.marca} ${m.modelo}"?`)) {
+    data.splice(i, 1);
+    save();
+  }
+}
+
+function move(i, d) {
+  const j = i + d;
+  if (j < 0 || j >= data.length) return;
+  sort.key = '';           // mover manualmente limpa a ordenação
+  sort.asc = true;
+  [data[i], data[j]] = [data[j], data[i]];
+  save();
+}
+
+function sortBy(k) {
+  if (sort.key !== k) { sort.key = k; sort.asc = true; }
+  else if (sort.asc) { sort.asc = false; }
+  else { sort.key = ''; sort.asc = true; }   // 3º clique: limpa ordenação
+  render();
+}
+
+/* ============================================================
+   Renderização
+   ============================================================ */
+function render() {
+  const q = (searchEl.value || '').toLowerCase().trim();
+  const arr = data.map((m, i) => ({ ...m, _i: i }));
+  const filtered = q
+    ? arr.filter(m => FIELDS.some(k => String(m[k] || '').toLowerCase().includes(q)))
+    : arr;
+
+  if (sort.key) {
+    filtered.sort((a, b) =>
+      String(a[sort.key] || '').localeCompare(
+        String(b[sort.key] || ''), 'pt-BR', { numeric: true }
+      ) * (sort.asc ? 1 : -1)
+    );
+  }
+
+  bodyEl.innerHTML = filtered.map(m => {
+    const foto = isImg(m.foto)
+      ? `<img class="photo" src="${esc(m.foto)}" alt="Foto de ${esc(m.marca)} ${esc(m.modelo)}" loading="lazy">`
+      : '—';
+    return `<tr>
+      <td>${foto}</td>
+      <td>${esc(m.marca)}</td>
+      <td>${esc(m.modelo)}</td>
+      <td>${esc(m.numeracao)}</td>
+      <td>${esc(m.caracteristica)}</td>
+      <td>${esc(m.estado)}</td>
+      <td class="no-print"><div class="rowBtns">
+        <button type="button" onclick="edit(${m._i})">Editar</button>
+        <button type="button" class="secondary" onclick="novoAbaixo(${m._i})" title="Adicionar linha abaixo" aria-label="Adicionar linha abaixo">＋↓</button>
+        <button type="button" class="secondary" onclick="move(${m._i},-1)" aria-label="Mover para cima">↑</button>
+        <button type="button" class="secondary" onclick="move(${m._i},1)" aria-label="Mover para baixo">↓</button>
+        <button type="button" class="danger" onclick="del(${m._i})">Excluir</button>
+      </div></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="7">Nenhum registro.</td></tr>';
+
+  const base = { Nova: 0, Seminova: 0, 'Pouco uso': 0, Usada: 0 };
+  const extras = {};
+  data.forEach(x => {
+    if (base[x.estado] !== undefined) base[x.estado]++;
+    else if (x.estado) extras[x.estado] = (extras[x.estado] || 0) + 1;
+  });
+  const brands = new Set(
+    data.map(x => (x.marca || '').trim().toLowerCase()).filter(Boolean)
+  ).size;
+
+  let html = `<div class="stat">Total<b>${data.length}</b></div><div class="stat">Marcas<b>${brands}</b></div>`;
+  for (const [k, v] of Object.entries(base)) html += `<div class="stat">${esc(k)}<b>${v}</b></div>`;
+  for (const [k, v] of Object.entries(extras)) html += `<div class="stat">${esc(k)}<b>${v}</b></div>`;
+  statsEl.innerHTML = html;
+
+  document.querySelectorAll('th[data-sort]').forEach(th => {
+    const active = th.dataset.sort === sort.key;
+    th.setAttribute('aria-sort', active ? (sort.asc ? 'ascending' : 'descending') : 'none');
+  });
+}
+
+/* ============================================================
+   Importar / exportar
+   ============================================================ */
+function timestamp(ext) {
+  const d = new Date();
+  const p = n => String(n).padStart(2, '0');
+  return `Inventario_de_Ativos_${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}h${p(d.getMinutes())}.${ext}`;
+}
+
+function download(blob, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+function exportJSON() {
+  if (!data.length) { alert('Nenhum registro para exportar.'); return; }
+  download(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }), timestamp('json'));
+}
+
+function exportCSV() {
+  if (!data.length) { alert('Nenhum registro para exportar.'); return; }
+  const rows = [['Marca', 'Modelo', 'Numeração', 'Característica', 'Estado'],
+    ...data.map(x => [x.marca, x.modelo, x.numeracao, x.caracteristica, x.estado])];
+  const csv = '\uFEFF' + rows
+    .map(r => r.map(v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"').join(';'))
+    .join('\r\n');
+  download(new Blob([csv], { type: 'text/csv;charset=utf-8' }), timestamp('csv'));
+}
+
+function parseCSV(text) {
+  const first = (text.split(/\r?\n/, 1)[0] || '');
+  const sep = (first.match(/;/g) || []).length >= (first.match(/,/g) || []).length ? ';' : ',';
+  const rows = []; let row = [], cell = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === '"') {
+      if (q && text[i + 1] === '"') { cell += '"'; i++; }
+      else q = !q;
+    } else if (c === sep && !q) { row.push(cell); cell = ''; }
+    else if ((c === '\n' || c === '\r') && !q) {
+      if (c === '\r' && text[i + 1] === '\n') i++;
+      row.push(cell);
+      if (row.some(x => x.trim() !== '')) rows.push(row);
+      row = []; cell = '';
+    } else cell += c;
+  }
+  row.push(cell);
+  if (row.some(x => x.trim() !== '')) rows.push(row);
+  return rows;
+}
+
+const normHeader = x => String(x || '').trim().toLowerCase()
+  .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+impEl.onchange = e => {
+  const f = e.target.files && e.target.files[0];
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      const parsed = JSON.parse(r.result);
+      if (!Array.isArray(parsed)) throw new Error('O arquivo deve conter uma lista de registros.');
+      const imported = parsed.map(normalize).filter(Boolean);
+      if (!imported.length) throw new Error('Nenhum registro válido encontrado.');
+      if (!confirm(`Importar ${imported.length} registro(s)?\n\nATENÇÃO: isso substituirá os ${data.length} registros atuais.`)) return;
+      data = imported;
+      if (save()) alert('Importação JSON concluída.');
+    } catch (err) {
+      alert('Arquivo JSON inválido: ' + err.message);
+    }
+  };
+  r.readAsText(f);
+  e.target.value = '';
+};
+
+impcsvEl.onchange = e => {
+  const f = e.target.files && e.target.files[0];
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      const rows = parseCSV(String(r.result).replace(/^\uFEFF/, ''));
+      if (rows.length < 2) throw new Error('Arquivo sem linhas de dados.');
+      const h = rows[0].map(normHeader);
+      const find = (...nomes) => {
+        for (const x of nomes) {
+          const i = h.indexOf(normHeader(x));
+          if (i >= 0) return i;
+        }
+        return -1;
+      };
+      const im = find('marca'), imo = find('modelo');
+      const inu = find('numeracao', 'numeração');
+      const ic = find('caracteristica', 'característica');
+      const ie = find('estado');
+      if (im < 0 || imo < 0) throw new Error('Cabeçalhos obrigatórios ausentes: Marca e Modelo.');
+      const imported = rows.slice(1).map((x, k) => normalize({
+        marca: x[im], modelo: x[imo],
+        numeracao: inu >= 0 ? x[inu] : String(k + 1).padStart(4, '0'),
+        caracteristica: ic >= 0 ? x[ic] : '',
+        estado: ie >= 0 ? x[ie] : 'Nova',
+        foto: ''
+      })).filter(x => x && (x.marca || x.modelo));
+      if (!imported.length) throw new Error('Nenhum registro válido encontrado.');
+      if (!confirm(`Importar ${imported.length} registro(s)?\n\nATENÇÃO: isso substituirá os ${data.length} registros atuais.`)) return;
+      data = imported;
+      if (save()) alert('CSV importado com sucesso.');
+    } catch (err) {
+      alert('CSV inválido: ' + err.message);
+    }
+  };
+  r.readAsText(f, 'UTF-8');
+  e.target.value = '';
+};
+
+/* ============================================================
+   Impressão
+   ============================================================ */
+function printReport() {
+  const el = document.getElementById('printDate');
+  if (el) el.textContent = new Date().toLocaleString('pt-BR');
+  window.print();
+}
+
+/* ============================================================
+   Listeners e inicialização
+   ============================================================ */
+searchEl.addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(render, 200);
+});
+
+document.querySelectorAll('th[data-sort]').forEach(th => {
+  const go = () => sortBy(th.dataset.sort);
+  th.addEventListener('click', go);
+  th.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }
+  });
+});
+
+try { render(); } catch (err) {
+  bodyEl.innerHTML = '<tr><td colspan="7">Erro ao carregar dados.</td></tr>';
+  console.error(err);
+}
+</script>
+</body>
+</html>
