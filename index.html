@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Inventário de Ativos</title>
 <link rel="icon" href="icon.ico" type="image/x-icon">
-<link rel="shortcut icon" href="icon.ico" type="image/x-icon">  
+<link rel="shortcut icon" href="icon.ico" type="image/x-icon">
 <style>
 html{height:100%}
 body{font-family:Arial;background:#0f172a;color:#e5e7eb;margin:0;height:100%;display:flex;flex-direction:column;overflow:hidden}
@@ -36,7 +36,7 @@ button:focus-visible{outline:2px solid #93c5fd;outline-offset:2px}
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
 .stat{background:#1e293b;padding:14px;border-radius:10px}
 .stat b{display:block;font-size:24px}
-table{width:100%;border-collapse:collapse;min-width:850px}
+table{width:100%;border-collapse:collapse;min-width:950px}
 th,td{padding:9px;text-align:left}
 td{border-bottom:1px solid #334155}
 th{cursor:pointer;color:#93c5fd;user-select:none;position:sticky;top:0;background:#111827;z-index:2;box-shadow:inset 0 -1px 0 #334155}
@@ -80,11 +80,12 @@ dialog::backdrop{background:#000a}
   th,td{color:#000!important;border:1px solid #777;padding:3px 4px;word-break:break-word;white-space:normal}
   th{background:#eee!important;font-size:8.5pt;position:static;box-shadow:none}
   th[data-sort]::after{content:''}
-  th:nth-child(2),td:nth-child(2){width:15%}
-  th:nth-child(3),td:nth-child(3){width:18%}
-  th:nth-child(4),td:nth-child(4){width:13%}
-  th:nth-child(5),td:nth-child(5){width:39%}
-  th:nth-child(6),td:nth-child(6){width:15%}
+  th:nth-child(2),td:nth-child(2){width:14%}
+  th:nth-child(3),td:nth-child(3){width:17%}
+  th:nth-child(4),td:nth-child(4){width:11%}
+  th:nth-child(5),td:nth-child(5){width:30%}
+  th:nth-child(6),td:nth-child(6){width:13%}
+  th:nth-child(7),td:nth-child(7){width:15%}
   tr{break-inside:avoid;page-break-inside:avoid}
 }
 </style>
@@ -114,7 +115,7 @@ dialog::backdrop{background:#000a}
     </div>
     <div style="margin-top:12px">
       <label for="search" class="search-label">Pesquisar</label>
-      <input id="search" placeholder="Marca, modelo, numeração, característica ou estado...">
+      <input id="search" placeholder="Marca, modelo, numeração, característica, estado ou valor...">
     </div>
   </div>
 
@@ -129,6 +130,7 @@ dialog::backdrop{background:#000a}
             <th data-sort="numeracao" tabindex="0" role="button" aria-sort="none">Numeração</th>
             <th data-sort="caracteristica" tabindex="0" role="button" aria-sort="none">Característica</th>
             <th data-sort="estado" tabindex="0" role="button" aria-sort="none">Estado</th>
+            <th data-sort="valor" tabindex="0" role="button" aria-sort="none">Valor (R$)</th>
             <th class="no-print">Ações</th>
           </tr>
         </thead>
@@ -152,6 +154,7 @@ dialog::backdrop{background:#000a}
         <option>Pouco uso</option>
         <option>Usada</option>
       </select></label>
+      <label>Valor (R$)<input id="valor" inputmode="decimal" placeholder="0,00" autocomplete="off"></label>
     </div>
     <label>Característica<textarea id="caracteristica" rows="3"></textarea></label>
     <label>Foto<input type="file" id="foto" accept="image/*"></label>
@@ -186,6 +189,7 @@ const modeloEl      = $('modelo');
 const numeracaoEl   = $('numeracao');
 const caracterEl    = $('caracteristica');
 const estadoEl      = $('estado');
+const valorEl       = $('valor');
 const previewEl     = $('preview');
 const btnRemoveEl   = $('btnRemovePhoto');
 const dlgEl         = $('dlg');
@@ -210,6 +214,31 @@ function esc(v) {
 const isImg = s => typeof s === 'string' &&
   /^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=\s]+$/i.test(s);
 
+// Converte valor em formatos comuns (número, "1234,56", "1.234,56", "R$ 1.234,56").
+function parseValor(v) {
+  if (v == null || v === '') return 0;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
+  let s = String(v).trim().replace(/R\$\s?/gi, '').replace(/\s/g, '');
+  if (!s) return 0;
+  if (s.includes(',') && s.includes('.')) {
+    // "1.234,56" → remove ponto (milhar), troca vírgula por ponto (decimal)
+    s = s.replace(/\./g, '').replace(',', '.');
+  } else if (s.includes(',')) {
+    s = s.replace(',', '.');
+  } else if (/^\d{1,3}(\.\d{3})+$/.test(s)) {
+    // "1.234" ou "1.234.567" (só milhares) → remove pontos
+    s = s.replace(/\./g, '');
+  }
+  const n = parseFloat(s);
+  return Number.isFinite(n) ? n : 0;
+}
+
+const formatBRL = n => (Number(n) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const formatValorInput = n => {
+  const v = Number(n) || 0;
+  return v ? v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
+};
+
 function normalize(m) {
   if (!m || typeof m !== 'object') return null;
   const s = v => v == null ? '' : String(v).trim();
@@ -219,6 +248,7 @@ function normalize(m) {
     numeracao: s(m.numeracao),
     caracteristica: s(m.caracteristica),
     estado: s(m.estado) || 'Nova',
+    valor: parseValor(m.valor),
     foto: isImg(m.foto) ? m.foto : ''
   };
 }
@@ -296,6 +326,7 @@ function abrirFormulario() {
   clearCustomEstado();
   idxEl.value = '';
   numeracaoEl.value = nextNumber();
+  valorEl.value = '';
   resetPreview();
   fotoEl.value = '';
   dlgTitleEl.textContent = 'Nova máquina';
@@ -316,12 +347,13 @@ function novoAbaixo(i) {
 function edit(i) {
   const m = data[i];
   if (!m) return;
-  insertAfterIdx = null;   // edição não usa inserção
+  insertAfterIdx = null;
   idxEl.value = i;
   marcaEl.value = m.marca;
   modeloEl.value = m.modelo;
   numeracaoEl.value = m.numeracao;
   caracterEl.value = m.caracteristica;
+  valorEl.value = formatValorInput(m.valor);
   setEstado(m.estado);
   photoData = m.foto || '';
   if (photoData) {
@@ -340,6 +372,12 @@ function removePhoto() {
   resetPreview();
   fotoEl.value = '';
 }
+
+// Formata o valor ao sair do campo (mantém o que o usuário digitou até o submit)
+valorEl.addEventListener('blur', () => {
+  const v = parseValor(valorEl.value);
+  valorEl.value = v ? v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
+});
 
 /* Redimensiona a imagem no cliente antes de gravar (evita estourar o localStorage). */
 function resizeImage(file) {
@@ -389,6 +427,7 @@ formEl.onsubmit = e => {
     numeracao: numeracaoEl.value,
     caracteristica: caracterEl.value,
     estado: estadoEl.value,
+    valor: valorEl.value,
     foto: photoData
   });
   if (!obj || !obj.marca || !obj.modelo) {
@@ -397,7 +436,6 @@ formEl.onsubmit = e => {
   }
   const i = idxEl.value;
   if (i === '') {
-    // Inserção: no fim (padrão) ou logo após o registro escolhido
     if (insertAfterIdx !== null && insertAfterIdx >= 0 && insertAfterIdx < data.length) {
       data.splice(insertAfterIdx + 1, 0, obj);
     } else {
@@ -425,7 +463,7 @@ function del(i) {
 function move(i, d) {
   const j = i + d;
   if (j < 0 || j >= data.length) return;
-  sort.key = '';           // mover manualmente limpa a ordenação
+  sort.key = '';
   sort.asc = true;
   [data[i], data[j]] = [data[j], data[i]];
   save();
@@ -434,7 +472,7 @@ function move(i, d) {
 function sortBy(k) {
   if (sort.key !== k) { sort.key = k; sort.asc = true; }
   else if (sort.asc) { sort.asc = false; }
-  else { sort.key = ''; sort.asc = true; }   // 3º clique: limpa ordenação
+  else { sort.key = ''; sort.asc = true; }
   render();
 }
 
@@ -445,21 +483,30 @@ function render() {
   const q = (searchEl.value || '').toLowerCase().trim();
   const arr = data.map((m, i) => ({ ...m, _i: i }));
   const filtered = q
-    ? arr.filter(m => FIELDS.some(k => String(m[k] || '').toLowerCase().includes(q)))
+    ? arr.filter(m =>
+        FIELDS.some(k => String(m[k] || '').toLowerCase().includes(q)) ||
+        formatBRL(m.valor).toLowerCase().includes(q)
+      )
     : arr;
 
   if (sort.key) {
-    filtered.sort((a, b) =>
-      String(a[sort.key] || '').localeCompare(
-        String(b[sort.key] || ''), 'pt-BR', { numeric: true }
-      ) * (sort.asc ? 1 : -1)
-    );
+    const dir = sort.asc ? 1 : -1;
+    if (sort.key === 'valor') {
+      filtered.sort((a, b) => ((Number(a.valor) || 0) - (Number(b.valor) || 0)) * dir);
+    } else {
+      filtered.sort((a, b) =>
+        String(a[sort.key] || '').localeCompare(
+          String(b[sort.key] || ''), 'pt-BR', { numeric: true }
+        ) * dir
+      );
+    }
   }
 
   bodyEl.innerHTML = filtered.map(m => {
     const foto = isImg(m.foto)
       ? `<img class="photo" src="${esc(m.foto)}" alt="Foto de ${esc(m.marca)} ${esc(m.modelo)}" loading="lazy">`
       : '—';
+    const valorTxt = (Number(m.valor) || 0) > 0 ? formatBRL(m.valor) : '—';
     return `<tr>
       <td>${foto}</td>
       <td>${esc(m.marca)}</td>
@@ -467,6 +514,7 @@ function render() {
       <td>${esc(m.numeracao)}</td>
       <td>${esc(m.caracteristica)}</td>
       <td>${esc(m.estado)}</td>
+      <td>${esc(valorTxt)}</td>
       <td class="no-print"><div class="rowBtns">
         <button type="button" onclick="edit(${m._i})">Editar</button>
         <button type="button" class="secondary" onclick="novoAbaixo(${m._i})" title="Adicionar linha abaixo" aria-label="Adicionar linha abaixo">＋↓</button>
@@ -475,7 +523,7 @@ function render() {
         <button type="button" class="danger" onclick="del(${m._i})">Excluir</button>
       </div></td>
     </tr>`;
-  }).join('') || '<tr><td colspan="7">Nenhum registro.</td></tr>';
+  }).join('') || '<tr><td colspan="8">Nenhum registro.</td></tr>';
 
   const base = { Nova: 0, Seminova: 0, 'Pouco uso': 0, Usada: 0 };
   const extras = {};
@@ -486,8 +534,10 @@ function render() {
   const brands = new Set(
     data.map(x => (x.marca || '').trim().toLowerCase()).filter(Boolean)
   ).size;
+  const totalValor = data.reduce((s, x) => s + (Number(x.valor) || 0), 0);
 
   let html = `<div class="stat">Total<b>${data.length}</b></div><div class="stat">Marcas<b>${brands}</b></div>`;
+  html += `<div class="stat">Valor total<b style="font-size:18px">${esc(formatBRL(totalValor))}</b></div>`;
   for (const [k, v] of Object.entries(base)) html += `<div class="stat">${esc(k)}<b>${v}</b></div>`;
   for (const [k, v] of Object.entries(extras)) html += `<div class="stat">${esc(k)}<b>${v}</b></div>`;
   statsEl.innerHTML = html;
@@ -524,8 +574,9 @@ function exportJSON() {
 
 function exportCSV() {
   if (!data.length) { alert('Nenhum registro para exportar.'); return; }
-  const rows = [['Marca', 'Modelo', 'Numeração', 'Característica', 'Estado'],
-    ...data.map(x => [x.marca, x.modelo, x.numeracao, x.caracteristica, x.estado])];
+  const rows = [['Marca', 'Modelo', 'Numeração', 'Característica', 'Estado', 'Valor (R$)'],
+    ...data.map(x => [x.marca, x.modelo, x.numeracao, x.caracteristica, x.estado,
+      (Number(x.valor) || 0).toFixed(2).replace('.', ',')])];
   const csv = '\uFEFF' + rows
     .map(r => r.map(v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"').join(';'))
     .join('\r\n');
@@ -598,12 +649,14 @@ impcsvEl.onchange = e => {
       const inu = find('numeracao', 'numeração');
       const ic = find('caracteristica', 'característica');
       const ie = find('estado');
+      const iv = find('valor', 'valor (r$)', 'valor r$', 'preco', 'preço', 'vlr');
       if (im < 0 || imo < 0) throw new Error('Cabeçalhos obrigatórios ausentes: Marca e Modelo.');
       const imported = rows.slice(1).map((x, k) => normalize({
         marca: x[im], modelo: x[imo],
         numeracao: inu >= 0 ? x[inu] : String(k + 1).padStart(4, '0'),
         caracteristica: ic >= 0 ? x[ic] : '',
         estado: ie >= 0 ? x[ie] : 'Nova',
+        valor: iv >= 0 ? x[iv] : 0,
         foto: ''
       })).filter(x => x && (x.marca || x.modelo));
       if (!imported.length) throw new Error('Nenhum registro válido encontrado.');
@@ -644,7 +697,7 @@ document.querySelectorAll('th[data-sort]').forEach(th => {
 });
 
 try { render(); } catch (err) {
-  bodyEl.innerHTML = '<tr><td colspan="7">Erro ao carregar dados.</td></tr>';
+  bodyEl.innerHTML = '<tr><td colspan="8">Erro ao carregar dados.</td></tr>';
   console.error(err);
 }
 </script>
